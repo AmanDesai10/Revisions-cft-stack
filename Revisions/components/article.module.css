@@ -1,0 +1,15 @@
+.feed-dot {
+  @apply absolute -left-1 -top-[1.0625rem] h-[0.5625rem] w-[0.5625rem] rounded-full border-2 border-slate-300 bg-white md:top-[0.4375rem];
+}
+
+.feed-border {
+  @apply absolute -bottom-2 -top-3 left-0 w-px bg-slate-200 md:top-2.5;
+}
+
+.content-date {
+  @apply pl-7 text-xs leading-6 text-slate-500 sm:text-sm md:w-1/4 md:pl-0 md:pr-12 md:text-right;
+}
+
+.content-block {
+  @apply relative pb-16 pl-7 pt-2 md:w-3/4 md:pl-12 md:pt-0;
+}

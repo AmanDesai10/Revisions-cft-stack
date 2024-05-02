@@ -1,0 +1,498 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Cloud formation stack for Revisions Web Application.
+
+Resources:
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: CloudTermProjectApi
+      Description: API Gateway for CloudTerm Project
+
+  EmailSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: SendEmailTopic
+      TopicName: SendEmailTopic
+
+  LambdaSNSSubscribeFunction:    
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: LambdaSNSSubscribeFunction
+      Handler: index.subscribe
+      Runtime: python3.10
+      Timeout: 30
+      Role: arn:aws:iam::339712771411:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          def subscribe(event, context):
+              email = event['email']
+              sns = boto3.client('sns')
+              response = sns.subscribe(
+                  TopicArn=os.environ['EMAIL_SNS_TOPIC_ARN'],
+                  Protocol='email',
+                  Endpoint=email
+              )
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Subscribed successfully')
+              }
+      Environment:
+        Variables:
+          EMAIL_SNS_TOPIC_ARN: !Ref EmailSNSTopic
+  
+  LambdaTestPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref LambdaSNSSubscribeFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*'
+
+  SNSSubscribeGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: subscribe
+
+  LambdaSNSSubscribePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref LambdaSNSSubscribeFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/subscribe'
+
+  SNSSubscribeOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref SNSSubscribeGatewayResource
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: "Empty"
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+  
+  SNSSubscribeApiGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref SNSSubscribeGatewayResource
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaSNSSubscribeFunction.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              application/json: $input.json('$')
+        RequestTemplates:
+          application/json: $input.json('$')
+      RequestParameters:
+        method.request.querystring.name: false
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+
+  SendEmailLambdaFunction:    
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: SendEmailLambdaFunction
+      Handler: index.sendEmail
+      Runtime: python3.8
+      Timeout: 30
+      Role: arn:aws:iam::339712771411:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          def sendEmail(event, context):
+              email = event['email']
+              message = event['message']
+              subject = event['subject']
+              sns = boto3.client('sns')
+              response = sns.publish(
+                  TopicArn=os.environ['EMAIL_SNS_TOPIC_ARN'],
+                  Message=message,
+                  Subject=subject,
+                  MessageAttributes={
+                      'email': {
+                          'DataType': 'String',
+                          'StringValue': email
+                      }
+                  }
+              )
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Email sent successfully')
+              }
+      Environment:
+        Variables:
+          EMAIL_SNS_TOPIC_ARN: !Ref EmailSNSTopic
+  
+  SendEmailLambdaTestPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref SendEmailLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*'
+
+  ApiGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: sendemail
+
+  SendEmailLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref SendEmailLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/sendemail'
+# Options method
+  SendEmailOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              application/json: ""
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: "Empty"
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+
+  SendEmailApiGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendEmailLambdaFunction.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              application/json: $input.json('$')
+        RequestTemplates:
+          application/json: $input.json('$')
+      RequestParameters:
+        method.request.querystring.name: false
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+
+  EmailSNSSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref EmailSNSTopic
+      Endpoint: !GetAtt LambdaSNSSubscribeFunction.Arn
+
+  ApiGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: 
+      - SNSSubscribeOptionsMethod
+      - SNSSubscribeApiGatewayMethod
+      - SendEmailOptionsMethod
+      - SendEmailApiGatewayMethod      
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayStage:
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: 'prod'
+
+  CSCI5409Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: amanb00965752
+      VersioningConfiguration:
+        Status: Enabled
+  CSCI5409BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CSCI5409Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - s3:GetObject
+              # - s3:PutObject
+              # - s3:DeleteObject
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - !GetAtt CSCI5409Bucket.Arn
+                - /*
+            Principal:
+              AWS: !Join
+                - ''
+                - - 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity '
+                  - !Ref CloudFrontOriginAccessIdentity
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: Origin access identity for cloudfront-infrastructure
+  CloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: distribution for cloudfront-infrastructure
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt CSCI5409Bucket.DomainName
+            Id: !Ref CSCI5409Bucket
+            S3OriginConfig:
+              OriginAccessIdentity: !Join
+                - ''
+                - - origin-access-identity/cloudfront/
+                  - !Ref CloudFrontOriginAccessIdentity
+        Enabled: true
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+          TargetOriginId: !Ref CSCI5409Bucket
+          ViewerProtocolPolicy: https-only
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: none      
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: csci5409-cluster
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: nextjs-task
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: arn:aws:iam::339712771411:role/LabRole
+      ContainerDefinitions:
+        - Name: nextjs-container
+          Image: amandesai05/revisions-nextjs
+          PortMappings:
+            - ContainerPort: 3000
+          Environment:
+            - Name: NEXTAUTH_URL
+              Value: http://app.revisions.tech
+            - Name: NEXT_PUBLIC_ROOT_DOMAIN
+              Value: revisions.tech
+            - Name: NEXTAUTH_SECRET
+              Value: <Removed because of security reasons>
+            - Name: AUTH_GITHUB_ID
+              Value: <Removed because of security reasons>
+            - Name: AUTH_GITHUB_SECRET
+              Value: <Removed because of security reasons>
+            - Name: AWS_ACCESS_KEY_ID
+              Value: <Removed because of security reasons>
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: <Removed because of security reasons>
+            - Name: AWS_SESSION_TOKEN
+              Value: <Removed because of security reasons>
+            - Name: AWS_REGION
+              Value: us-east-1
+            - Name: AWS_BUCKET_NAME
+              Value: amanb00965752
+            - Name: AWS_BUCKET_URL
+              Value: https://amanb00965752.s3.amazonaws.com
+            - Name: AWS_CLOUDFRONT_URL
+              Value: !Sub https://${CloudfrontDistribution.DomainName}
+            - Name: AWS_APIGATEWAY_URL
+              Value: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: Listener
+    Properties:
+      ServiceName: nextjs-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      LoadBalancers:
+        - TargetGroupArn: !Ref TargetGroup
+          ContainerName: nextjs-container
+          ContainerPort: 3000
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - subnet-0eaf34f77f4e578c8
+            - subnet-0ed4d9bd8709c807b
+          SecurityGroups:
+            - !Ref SecurityGroup
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MySecurityGroup
+      GroupDescription: A security group for my instance
+      VpcId: vpc-04fff8f1e1e96f57c
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - subnet-0eaf34f77f4e578c8
+        - subnet-0ed4d9bd8709c807b
+      SecurityGroups:
+        - !Ref SecurityGroup
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 3000
+      Protocol: HTTP
+      VpcId: vpc-04fff8f1e1e96f57c
+      TargetType: ip
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: Z08797943846UUII9JGUE
+      Name: revisions.tech
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+        DNSName: !GetAtt LoadBalancer.DNSName
+  WildcardRecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: Z08797943846UUII9JGUE
+      Name: '*.revisions.tech'
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+        DNSName: !GetAtt LoadBalancer.DNSName
+
+Outputs:
+  CloudfrontDistribution:
+    Description: Cloudfront Distribution
+    Value: !Ref CloudfrontDistribution
+  CloudFrontOriginAccessIdentity:
+    Description: Cloudfront Origin Access Identity (OAI)
+    Value: !Ref CloudFrontOriginAccessIdentity
+  CSCI5409Bucket:
+    Description: Cloudfront Origin - S3 Bucket
+    Value: !Ref CSCI5409Bucket
+  CSCI5409BucketPolicy:
+    Description: S3 Bucket Policy
+    Value: !Ref CSCI5409BucketPolicy
+  SendEmailApiUrl:
+    Description: URL of the API endpoint
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/sendemail'
+  SubscribeApiUrl:
+    Description: URL of the API endpoint
+    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/subscribe'
+  CloudfrontUrl:
+    Description: Cloudfront URL
+    Value: !Sub 'https://${CloudfrontDistribution.DomainName}'
+  LoadBalancer:
+    Description: Load Balancer
+    Value: !Ref LoadBalancer
