@@ -1,17 +1,15 @@
-import prisma from "@/lib/prisma";
+"use client";
+
 import Form from "@/components/form";
 import { updateOrganisation } from "@/lib/actions";
+import { useOrganisationStore } from "@/stores/organisation-store";
 
-export default async function SiteSettingsDomains({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const data = await prisma.organisation.findUnique({
-    where: {
-      id: decodeURIComponent(params.id),
-    },
-  });
+export default async function SiteSettingsDomains() {
+  const currentOrganisation = useOrganisationStore(
+    (state) => state.currentOrganisation,
+  );
+
+  if (!currentOrganisation) return null;
 
   return (
     <div className="flex flex-col space-y-6">
@@ -22,13 +20,15 @@ export default async function SiteSettingsDomains({
         inputAttrs={{
           name: "subdomain",
           type: "text",
-          defaultValue: data?.subdomain!,
+          defaultValue: currentOrganisation?.subdomain!,
           placeholder: "subdomain",
           maxLength: 32,
         }}
-        handleSubmit={updateOrganisation}
+        handleSubmit={(e: FormData) =>
+          updateOrganisation(e, currentOrganisation.id, "subdomain")
+        }
       />
-      <Form
+      {/* <Form
         title="Custom Domain"
         description="The custom domain for your site."
         helpText="Please enter a valid domain."
@@ -41,7 +41,7 @@ export default async function SiteSettingsDomains({
           pattern: "^[a-z0-9]+([\\-\\.]{1}[a-z0-9]+)*\\.[a-z]{2,5}$",
         }}
         handleSubmit={updateOrganisation}
-      />
+      /> */}
     </div>
   );
 }

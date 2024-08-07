@@ -1,12 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Cloud formation stack for Revisions Web Application.
+Description: Cloud formation stack for Revisions Next.js Application.
+
+Mappings:
+  ResourceTags:
+    project-tag:
+      project: "revisions"
+  Role:
+    LabRole:
+      Arn: "arn:aws:iam::690277647156:role/LabRole"
 
 Resources:
   ApiGatewayRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: CloudTermProjectApi
-      Description: API Gateway for CloudTerm Project
+      Name: RevisionsProjectApi
+      Description: API Gateway for Revisions Project
 
   EmailSNSTopic:
     Type: AWS::SNS::Topic
@@ -21,7 +29,7 @@ Resources:
       Handler: index.subscribe
       Runtime: python3.10
       Timeout: 30
-      Role: arn:aws:iam::339712771411:role/LabRole
+      Role: arn:aws:iam::690277647156:role/LabRole
       Code:
         ZipFile: |
           import json
@@ -34,7 +42,10 @@ Resources:
               response = sns.subscribe(
                   TopicArn=os.environ['EMAIL_SNS_TOPIC_ARN'],
                   Protocol='email',
-                  Endpoint=email
+                  Endpoint=email,
+                  Attributes={
+                      'FilterPolicy': json.dumps({'email': [email]})
+                  }
               )
               return {
                   'statusCode': 200,
@@ -133,7 +144,7 @@ Resources:
       Handler: index.sendEmail
       Runtime: python3.8
       Timeout: 30
-      Role: arn:aws:iam::339712771411:role/LabRole
+      Role: arn:aws:iam::690277647156:role/LabRole
       Code:
         ZipFile: |
           import json
@@ -259,7 +270,9 @@ Resources:
       - SNSSubscribeOptionsMethod
       - SNSSubscribeApiGatewayMethod
       - SendEmailOptionsMethod
-      - SendEmailApiGatewayMethod      
+      - SendEmailApiGatewayMethod  
+      - PreSignedUrlApiGatewayMethod
+      - PreSignedUrlApiGatewayOptionsMethod    
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
 
@@ -270,16 +283,18 @@ Resources:
       RestApiId: !Ref ApiGatewayRestApi
       StageName: 'prod'
 
-  CSCI5409Bucket:
+  # S3 bucket for storing images and other files
+  RevisionsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: amanb00965752
+      BucketName: revisionsb00965752
       VersioningConfiguration:
         Status: Enabled
-  CSCI5409BucketPolicy:
+  
+  RevisionsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref CSCI5409Bucket
+      Bucket: !Ref RevisionsBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -290,94 +305,139 @@ Resources:
             Effect: Allow
             Resource: !Join
               - ''
-              - - !GetAtt CSCI5409Bucket.Arn
-                - /*
-            Principal:
-              AWS: !Join
-                - ''
-                - - 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity '
-                  - !Ref CloudFrontOriginAccessIdentity
-  CloudFrontOriginAccessIdentity:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+              - - !GetAtt RevisionsBucket.Arn
+                - /* 
+            Principal: 
+              AWS: arn:aws:iam::690277647156:role/LabRole
+
+  # Pre-signed URL Lambda function for getting pre-signed URLs for getting the images
+  PreSignedUrlLambdaFunction:
+    Type: 'AWS::Lambda::Function'
     Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: Origin access identity for cloudfront-infrastructure
-  CloudfrontDistribution:
-    Type: AWS::CloudFront::Distribution
+      FunctionName: PreSignedUrlLambdaFunction
+      Handler: index.getPresignedUrl
+      Runtime: python3.12
+      Timeout: 30
+      Role: arn:aws:iam::690277647156:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          def getPresignedUrl(event, context):
+              s3 = boto3.client('s3')
+              bucket = os.environ['BUCKET_NAME']
+              key = event['key']
+              url = s3.generate_presigned_url(
+                  ClientMethod='get_object',
+                  Params={
+                      'Bucket': bucket,
+                      'Key': key
+                  }
+              )
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(url)
+              }
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref RevisionsBucket
+
+  ApiGatewayPreSignedUrlResource:
+    Type: 'AWS::ApiGateway::Resource'
     Properties:
-      DistributionConfig:
-        Comment: distribution for cloudfront-infrastructure
-        IPV6Enabled: true
-        Origins:
-          - DomainName: !GetAtt CSCI5409Bucket.DomainName
-            Id: !Ref CSCI5409Bucket
-            S3OriginConfig:
-              OriginAccessIdentity: !Join
-                - ''
-                - - origin-access-identity/cloudfront/
-                  - !Ref CloudFrontOriginAccessIdentity
-        Enabled: true
-        DefaultCacheBehavior:
-          AllowedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-            - PUT
-            - PATCH
-            - POST
-            - DELETE
-          TargetOriginId: !Ref CSCI5409Bucket
-          ViewerProtocolPolicy: https-only
-          ForwardedValues:
-            QueryString: true
-            Cookies:
-              Forward: none      
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: presignedurl
+
+  PreSignedUrlApiGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayPreSignedUrlResource
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PreSignedUrlLambdaFunction.Arn}/invocations"
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              application/json: $input.json('$')
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+  
+  PreSignedUrlApiGatewayOptionsMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayPreSignedUrlResource
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        PassthroughBehavior: WHEN_NO_MATCH
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'"
+              "method.response.header.Access-Control-Allow-Origin": "'*'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: "Empty"
+          ResponseParameters:
+            "method.response.header.Access-Control-Allow-Headers": true
+            "method.response.header.Access-Control-Allow-Methods": true
+            "method.response.header.Access-Control-Allow-Origin": true
+    # Log Group for ECS Tasks
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AWS::StackName}
+      RetentionInDays: 7
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: csci5409-cluster
+      ClusterName: revisions-cluster
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: nextjs-task
       Cpu: '1024'
       Memory: '2048'
+      RuntimePlatform:
+        CpuArchitecture: ARM64
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: arn:aws:iam::339712771411:role/LabRole
+      ExecutionRoleArn: arn:aws:iam::690277647156:role/LabRole
       ContainerDefinitions:
         - Name: nextjs-container
           Image: amandesai05/revisions-nextjs
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
           PortMappings:
             - ContainerPort: 3000
-          Environment:
-            - Name: NEXTAUTH_URL
-              Value: http://app.revisions.tech
-            - Name: NEXT_PUBLIC_ROOT_DOMAIN
-              Value: revisions.tech
-            - Name: NEXTAUTH_SECRET
-              Value: <Removed because of security reasons>
-            - Name: AUTH_GITHUB_ID
-              Value: <Removed because of security reasons>
-            - Name: AUTH_GITHUB_SECRET
-              Value: <Removed because of security reasons>
-            - Name: AWS_ACCESS_KEY_ID
-              Value: <Removed because of security reasons>
-            - Name: AWS_SECRET_ACCESS_KEY
-              Value: <Removed because of security reasons>
-            - Name: AWS_SESSION_TOKEN
-              Value: <Removed because of security reasons>
-            - Name: AWS_REGION
-              Value: us-east-1
-            - Name: AWS_BUCKET_NAME
-              Value: amanb00965752
-            - Name: AWS_BUCKET_URL
-              Value: https://amanb00965752.s3.amazonaws.com
-            - Name: AWS_CLOUDFRONT_URL
-              Value: !Sub https://${CloudfrontDistribution.DomainName}
-            - Name: AWS_APIGATEWAY_URL
-              Value: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod
   Service:
     Type: AWS::ECS::Service
     DependsOn: Listener
@@ -395,8 +455,8 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           Subnets:
-            - subnet-0eaf34f77f4e578c8
-            - subnet-0ed4d9bd8709c807b
+            - subnet-087788b48f12bba4c # us-east-1a
+            - subnet-09cd0552f11503aac # us-east-1b
           SecurityGroups:
             - !Ref SecurityGroup
   SecurityGroup:
@@ -404,7 +464,7 @@ Resources:
     Properties:
       GroupName: MySecurityGroup
       GroupDescription: A security group for my instance
-      VpcId: vpc-04fff8f1e1e96f57c
+      VpcId: vpc-0d0ab6104c1862766
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -425,8 +485,8 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
-        - subnet-0eaf34f77f4e578c8
-        - subnet-0ed4d9bd8709c807b
+        - subnet-087788b48f12bba4c # us-east-1a
+        - subnet-09cd0552f11503aac # us-east-1b
       SecurityGroups:
         - !Ref SecurityGroup
   TargetGroup:
@@ -434,7 +494,7 @@ Resources:
     Properties:
       Port: 3000
       Protocol: HTTP
-      VpcId: vpc-04fff8f1e1e96f57c
+      VpcId: vpc-0d0ab6104c1862766
       TargetType: ip
       HealthCheckPath: /
       HealthCheckIntervalSeconds: 30
@@ -442,7 +502,7 @@ Resources:
       HealthyThresholdCount: 5
       UnhealthyThresholdCount: 2
       Matcher:
-        HttpCode: '200'
+        HttpCode: '404'
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -450,12 +510,14 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
       LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: HTTP
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: arn:aws:acm:us-east-1:690277647156:certificate/ddcc8991-6cdb-4155-90db-03a49b60809e
   RecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneId: Z08797943846UUII9JGUE
+      HostedZoneId: Z066413417DELFCNHWLVG
       Name: revisions.tech
       Type: A
       AliasTarget:
@@ -464,7 +526,7 @@ Resources:
   WildcardRecordSet:
     Type: AWS::Route53::RecordSet
     Properties:
-      HostedZoneId: Z08797943846UUII9JGUE
+      HostedZoneId: Z066413417DELFCNHWLVG
       Name: '*.revisions.tech'
       Type: A
       AliasTarget:
@@ -472,27 +534,18 @@ Resources:
         DNSName: !GetAtt LoadBalancer.DNSName
 
 Outputs:
-  CloudfrontDistribution:
-    Description: Cloudfront Distribution
-    Value: !Ref CloudfrontDistribution
-  CloudFrontOriginAccessIdentity:
-    Description: Cloudfront Origin Access Identity (OAI)
-    Value: !Ref CloudFrontOriginAccessIdentity
-  CSCI5409Bucket:
+  RevisionsBucket:
     Description: Cloudfront Origin - S3 Bucket
-    Value: !Ref CSCI5409Bucket
-  CSCI5409BucketPolicy:
+    Value: !Ref RevisionsBucket
+  RevisionsBucketPolicy:
     Description: S3 Bucket Policy
-    Value: !Ref CSCI5409BucketPolicy
+    Value: !Ref RevisionsBucketPolicy
   SendEmailApiUrl:
     Description: URL of the API endpoint
     Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/sendemail'
   SubscribeApiUrl:
     Description: URL of the API endpoint
     Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/subscribe'
-  CloudfrontUrl:
-    Description: Cloudfront URL
-    Value: !Sub 'https://${CloudfrontDistribution.DomainName}'
   LoadBalancer:
     Description: Load Balancer
     Value: !Ref LoadBalancer

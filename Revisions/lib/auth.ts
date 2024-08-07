@@ -47,15 +47,15 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.user = user;
 
-        const response = await fetch(process.env.AWS_APIGATEWAY_URL + "/subscribe", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: user.email,
-          }),
-        });
+        // const response = await fetch(process.env.AWS_APIGATEWAY_URL + "/subscribe", {
+        //   method: "POST",
+        //   headers: {
+        //     "Content-Type": "application/json",
+        //   },
+        //   body: JSON.stringify({
+        //     email: user.email,
+        //   }),
+        // });
         // console.log("User logged in", user);
       }
 

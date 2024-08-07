@@ -13,11 +13,11 @@ export default async function Sitemap() {
 
   return [
     {
-      url: `http://${domain}`,
+      url: `https://${domain}`,
       lastModified: new Date(),
     },
     ...posts.map(({ slug }) => ({
-      url: `http://${domain}/${slug}`,
+      url: `https://${domain}/${slug}`,
       lastModified: new Date(),
     })),
   ];

@@ -6,7 +6,10 @@ import LogoutButton from "./logout-button";
 import { useUserStore } from "@/stores/user-store";
 
 export default function Profile() {
-  const user = useUserStore((state) => state.currentUser);
+  const user = useUserStore((state) => {
+    console.log("state.currentUser", state.currentUser);
+    return state.currentUser;
+  });
 
   return (
     <div className="flex w-full items-center justify-between">

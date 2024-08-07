@@ -52,8 +52,8 @@ export default function SiteCard({ data }: { data: Organisation }) {
         <a
           href={
             // process.env.NEXT_PUBLIC_VERCEL_ENV ?
-            `http://${url}`
-            // : `http://${data.subdomain}.localhost:3000`
+            `https://${url}`
+            // : `https://${data.subdomain}.localhost:3000`
           }
           target="_blank"
           rel="noreferrer"

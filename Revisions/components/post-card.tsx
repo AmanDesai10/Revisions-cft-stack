@@ -46,8 +46,8 @@ export default function PostCard({
         <a
           href={
             // process.env.NEXT_PUBLIC_VERCEL_ENV ?
-            `http://${url}`
-            // : `http://${data.organisation?.subdomain}.localhost:3000/${data.slug}`
+            `https://${url}`
+            // : `https://${data.organisation?.subdomain}.localhost:3000/${data.slug}`
           }
           target="_blank"
           rel="noreferrer"

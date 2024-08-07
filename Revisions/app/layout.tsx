@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     images: [image],
     creator: "@AmanDesai05",
   },
-  metadataBase: new URL("http://revisions.tech"),
+  metadataBase: new URL("https://revisions.tech"),
 };
 
 export default function RootLayout({

@@ -39,7 +39,7 @@ export async function generateMetadata({
     ...(params.domain.endsWith(`.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`) &&
       organisationData.customDomain && {
       alternates: {
-        canonical: `http://${organisationData.customDomain}/${params.slug}`,
+        canonical: `https://${organisationData.customDomain}/${params.slug}`,
       },
     }),
   };

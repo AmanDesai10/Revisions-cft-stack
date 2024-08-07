@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import AppInitializer from "./app-initializer";
 import Image from "next/image";
 import { useEffect } from "react";
+import CreateOrganisationModal from "@/components/modal/create-organisation";
 
 export default async function Overview() {
   const session = await getSession();
@@ -37,17 +38,8 @@ export default async function Overview() {
 
   if (!currentOrganisation) {
     return (
-      <div className="mt-20 flex flex-col items-center space-x-4">
-        <h1 className="font-cal text-4xl">No Sites Yet</h1>
-        <Image
-          alt="missing site"
-          src="https://illustrations.popsy.co/gray/web-design.svg"
-          width={400}
-          height={400}
-        />
-        <p className="text-lg text-stone-500">
-          You do not have any organisations yet. Create one to create posts.
-        </p>
+      <div className="flex h-screen items-center justify-center">
+        <CreateOrganisationModal />
       </div>
     );
   }
@@ -64,8 +56,8 @@ export default async function Overview() {
           <a
             href={
               // process.env.NEXT_PUBLIC_VERCEL_ENV?
-              `http://${url}`
-              // : `http://${currentOrganisation.subdomain}.localhost:3000`
+              `https://${url}`
+              // : `https://${currentOrganisation.subdomain}.localhost:3000`
             }
             target="_blank"
             rel="noreferrer"

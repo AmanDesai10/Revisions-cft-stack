@@ -41,8 +41,8 @@ export default async function SiteAnalyticsLayout({
         <a
           href={
             // process.env.NEXT_PUBLIC_VERCEL_ENV ?
-            `http://${url}`
-            // : `http://${currentOrganisation.subdomain}.localhost:3000`
+            `https://${url}`
+            // : `https://${currentOrganisation.subdomain}.localhost:3000`
           }
           target="_blank"
           rel="noreferrer"

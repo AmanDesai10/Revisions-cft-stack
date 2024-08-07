@@ -13,6 +13,7 @@ import {
 import { S3 } from "@aws-sdk/client-s3";
 import { customAlphabet } from "nanoid";
 import { getBlurDataURL } from "@/lib/utils";
+import { redirect } from "next/navigation";
 
 const nanoid = customAlphabet(
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
@@ -59,7 +60,7 @@ export const createOrganisation = async (formData: FormData) => {
       },
       body: JSON.stringify({
         email: session.user.email,
-        message: "Thank you for creating an organisation on Revisions! Here are some next steps to get started: \n\n1. Create a new post by clicking on the 'New Post' button on your dashboard. \n2. Share your organisation's URL with your audience to start publishing content. We also provided you with a subdomain to get started: http://" + subdomain + ".revisions.tech",
+        message: "Thank you for creating an organisation on Revisions! Here are some next steps to get started: \n\n1. Create a new post by clicking on the 'New Post' button on your dashboard. \n2. Share your organisation's URL with your audience to start publishing content. We also provided you with a subdomain to get started: https://" + subdomain + ".revisions.tech",
         subject: "Get started with your new organisation",
       }),
     });
@@ -371,7 +372,7 @@ export const updatePostMetadata = withPostAuth(
         },
         body: JSON.stringify({
           email: session.user.email,
-          message: "Your new post is published, and live!\n\nYou can view it here: http://" + post.organisation?.subdomain + ".revisions.tech/" + post.slug,
+          message: "Your new post is published, and live!\n\nYou can view it here: https://" + post.organisation?.subdomain + ".revisions.tech/" + post.slug,
           subject: "Your new post is published, and live!",
         }),
       });
@@ -483,3 +484,29 @@ export const updateUser = async (user: User) => {
     }
   }
 };
+
+export type PostWithOrganisation = Post & {
+  organisation: Organisation | null;
+};
+
+export async function fetchPosts(organisationId?: string, limit?: number): Promise<PostWithOrganisation[]> {
+  const session = await getSession();
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const fetchedPosts = await prisma.post.findMany({
+    where: {
+      userId: session.user.id as string,
+      ...(organisationId ? { organisationId: organisationId } : {}),
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    include: {
+      organisation: true,
+    },
+    ...(limit ? { take: limit } : {}),
+  });
+  return fetchedPosts;
+}
