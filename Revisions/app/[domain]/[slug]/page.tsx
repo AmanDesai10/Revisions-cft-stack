@@ -111,7 +111,7 @@ export default async function SitePostPage({
           alt={data.title ?? "Post image"}
           width={1200}
           height={630}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           placeholder="blur"
           blurDataURL={data.imageBlurhash ?? placeholderBlurhash}
           src={data.image ?? "/placeholder.png"}
@@ -121,28 +121,28 @@ export default async function SitePostPage({
         {data.content && <MDX content={data.content} className="m-auto" />}
       </div>
 
-      {data.adjacentPosts.length > 0 && (
-        <div className="relative mb-20 mt-10 sm:mt-20">
-          <div
-            className="absolute inset-0 flex items-center"
-            aria-hidden="true"
-          >
-            <div className="w-full border-t border-stone-300 dark:border-stone-700" />
+      {/* {data.adjacentPosts.length > 0 && (
+          <div className="relative mb-20 mt-10 sm:mt-20">
+            <div
+              className="absolute inset-0 flex items-center"
+              aria-hidden="true"
+            >
+              <div className="w-full border-t border-stone-300 dark:border-stone-700" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-white px-2 text-sm text-stone-500 dark:bg-black dark:text-stone-400">
+                Continue Reading
+              </span>
+            </div>
           </div>
-          <div className="relative flex justify-center">
-            <span className="bg-white px-2 text-sm text-stone-500 dark:bg-black dark:text-stone-400">
-              Continue Reading
-            </span>
+        )}
+        {data.adjacentPosts && (
+          <div className="mx-5 mb-20 grid max-w-screen-xl grid-cols-1 gap-x-4 gap-y-8 md:grid-cols-2 xl:mx-auto xl:grid-cols-3">
+            {data.adjacentPosts.map((data: any, index: number) => (
+              <BlogCard key={index} data={data} />
+            ))}
           </div>
-        </div>
-      )}
-      {data.adjacentPosts && (
-        <div className="mx-5 mb-20 grid max-w-screen-xl grid-cols-1 gap-x-4 gap-y-8 md:grid-cols-2 xl:mx-auto xl:grid-cols-3">
-          {data.adjacentPosts.map((data: any, index: number) => (
-            <BlogCard key={index} data={data} />
-          ))}
-        </div>
-      )}
+        )} */}
     </>
   );
 }

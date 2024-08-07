@@ -1,13 +1,38 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Cloud formation stack for Revisions Next.js Application.
 
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.3.0/24
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.4.0/24
+  DBName:
+    Type: String
+    Default: revisions
+  DBUsername:
+    Type: String
+  DBPassword:
+    Type: String
+    NoEcho: true
+
 Mappings:
   ResourceTags:
     project-tag:
-      project: "revisions"
+      project: revisions
   Role:
     LabRole:
-      Arn: "arn:aws:iam::690277647156:role/LabRole"
+      Arn: arn:aws:iam::690277647156:role/LabRole
 
 Resources:
   ApiGatewayRestApi:
@@ -22,8 +47,8 @@ Resources:
       DisplayName: SendEmailTopic
       TopicName: SendEmailTopic
 
-  LambdaSNSSubscribeFunction:    
-    Type: 'AWS::Lambda::Function'
+  LambdaSNSSubscribeFunction:
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: LambdaSNSSubscribeFunction
       Handler: index.subscribe
@@ -35,7 +60,6 @@ Resources:
           import json
           import boto3
           import os
-
           def subscribe(event, context):
               email = event['email']
               sns = boto3.client('sns')
@@ -54,32 +78,32 @@ Resources:
       Environment:
         Variables:
           EMAIL_SNS_TOPIC_ARN: !Ref EmailSNSTopic
-  
+
   LambdaTestPermission:
-    Type: 'AWS::Lambda::Permission'
+    Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref LambdaSNSSubscribeFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*'
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*
 
   SNSSubscribeGatewayResource:
-    Type: 'AWS::ApiGateway::Resource'
+    Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
       ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
       PathPart: subscribe
 
   LambdaSNSSubscribePermission:
-    Type: 'AWS::Lambda::Permission'
+    Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref LambdaSNSSubscribeFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/subscribe'
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/subscribe
 
   SNSSubscribeOptionsMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
       RestApiId: !Ref ApiGatewayRestApi
@@ -88,27 +112,27 @@ Resources:
       Integration:
         Type: MOCK
         RequestTemplates:
-          application/json: "{\"statusCode\": 200}"
+          application/json: '{"statusCode": 200}'
         PassthroughBehavior: WHEN_NO_MATCH
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'"
-              "method.response.header.Access-Control-Allow-Origin": "'*'"
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''POST,OPTIONS'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
             ResponseTemplates:
-              application/json: ""
+              application/json: ''
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
-            application/json: "Empty"
+            application/json: Empty
           ResponseParameters:
-            "method.response.header.Access-Control-Allow-Headers": true
-            "method.response.header.Access-Control-Allow-Methods": true
-            "method.response.header.Access-Control-Allow-Origin": true
-  
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   SNSSubscribeApiGatewayMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
       RestApiId: !Ref ApiGatewayRestApi
@@ -117,13 +141,13 @@ Resources:
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaSNSSubscribeFunction.Arn}/invocations"
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaSNSSubscribeFunction.Arn}/invocations
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
-              "method.response.header.Access-Control-Allow-Origin": "'*'"
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,PATCH,DELETE,OPTIONS'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
             ResponseTemplates:
               application/json: $input.json('$')
         RequestTemplates:
@@ -133,12 +157,12 @@ Resources:
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            "method.response.header.Access-Control-Allow-Headers": true
-            "method.response.header.Access-Control-Allow-Methods": true
-            "method.response.header.Access-Control-Allow-Origin": true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
-  SendEmailLambdaFunction:    
-    Type: 'AWS::Lambda::Function'
+  SendEmailLambdaFunction:
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: SendEmailLambdaFunction
       Handler: index.sendEmail
@@ -150,7 +174,6 @@ Resources:
           import json
           import boto3
           import os
-
           def sendEmail(event, context):
               email = event['email']
               message = event['message']
@@ -174,32 +197,32 @@ Resources:
       Environment:
         Variables:
           EMAIL_SNS_TOPIC_ARN: !Ref EmailSNSTopic
-  
+
   SendEmailLambdaTestPermission:
-    Type: 'AWS::Lambda::Permission'
+    Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref SendEmailLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*'
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*
 
   ApiGatewayResource:
-    Type: 'AWS::ApiGateway::Resource'
+    Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
       ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
       PathPart: sendemail
 
   SendEmailLambdaPermission:
-    Type: 'AWS::Lambda::Permission'
+    Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref SendEmailLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/sendemail'
-# Options method
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/sendemail
+  # Options method
   SendEmailOptionsMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
       RestApiId: !Ref ApiGatewayRestApi
@@ -208,27 +231,27 @@ Resources:
       Integration:
         Type: MOCK
         RequestTemplates:
-          application/json: "{\"statusCode\": 200}"
+          application/json: '{"statusCode": 200}'
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'"
-              "method.response.header.Access-Control-Allow-Origin": "'*'"
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''POST,OPTIONS'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
             ResponseTemplates:
-              application/json: ""
+              application/json: ''
         PassthroughBehavior: WHEN_NO_MATCH
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
-            application/json: "Empty"
+            application/json: Empty
           ResponseParameters:
-            "method.response.header.Access-Control-Allow-Headers": true
-            "method.response.header.Access-Control-Allow-Methods": true
-            "method.response.header.Access-Control-Allow-Origin": true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   SendEmailApiGatewayMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
       RestApiId: !Ref ApiGatewayRestApi
@@ -237,13 +260,13 @@ Resources:
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendEmailLambdaFunction.Arn}/invocations"
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendEmailLambdaFunction.Arn}/invocations
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
-              "method.response.header.Access-Control-Allow-Origin": "'*'"
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,PATCH,DELETE,OPTIONS'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
             ResponseTemplates:
               application/json: $input.json('$')
         RequestTemplates:
@@ -253,35 +276,35 @@ Resources:
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            "method.response.header.Access-Control-Allow-Headers": true
-            "method.response.header.Access-Control-Allow-Methods": true
-            "method.response.header.Access-Control-Allow-Origin": true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   EmailSNSSubscription:
-    Type: 'AWS::SNS::Subscription'
+    Type: AWS::SNS::Subscription
     Properties:
       Protocol: lambda
       TopicArn: !Ref EmailSNSTopic
       Endpoint: !GetAtt LambdaSNSSubscribeFunction.Arn
 
   ApiGatewayDeployment:
-    Type: 'AWS::ApiGateway::Deployment'
-    DependsOn: 
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
       - SNSSubscribeOptionsMethod
       - SNSSubscribeApiGatewayMethod
       - SendEmailOptionsMethod
-      - SendEmailApiGatewayMethod  
+      - SendEmailApiGatewayMethod
       - PreSignedUrlApiGatewayMethod
-      - PreSignedUrlApiGatewayOptionsMethod    
+      - PreSignedUrlApiGatewayOptionsMethod
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
 
   ApiGatewayStage:
-    Type: 'AWS::ApiGateway::Stage'
+    Type: AWS::ApiGateway::Stage
     Properties:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref ApiGatewayRestApi
-      StageName: 'prod'
+      StageName: prod
 
   # S3 bucket for storing images and other files
   RevisionsBucket:
@@ -290,7 +313,7 @@ Resources:
       BucketName: revisionsb00965752
       VersioningConfiguration:
         Status: Enabled
-  
+
   RevisionsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -306,13 +329,13 @@ Resources:
             Resource: !Join
               - ''
               - - !GetAtt RevisionsBucket.Arn
-                - /* 
-            Principal: 
+                - /*
+            Principal:
               AWS: arn:aws:iam::690277647156:role/LabRole
 
   # Pre-signed URL Lambda function for getting pre-signed URLs for getting the images
   PreSignedUrlLambdaFunction:
-    Type: 'AWS::Lambda::Function'
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: PreSignedUrlLambdaFunction
       Handler: index.getPresignedUrl
@@ -324,7 +347,6 @@ Resources:
           import json
           import boto3
           import os
-
           def getPresignedUrl(event, context):
               s3 = boto3.client('s3')
               bucket = os.environ['BUCKET_NAME']
@@ -345,14 +367,14 @@ Resources:
           BUCKET_NAME: !Ref RevisionsBucket
 
   ApiGatewayPreSignedUrlResource:
-    Type: 'AWS::ApiGateway::Resource'
+    Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref ApiGatewayRestApi
       ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
       PathPart: presignedurl
 
   PreSignedUrlApiGatewayMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
       RestApiId: !Ref ApiGatewayRestApi
@@ -361,24 +383,24 @@ Resources:
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PreSignedUrlLambdaFunction.Arn}/invocations"
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PreSignedUrlLambdaFunction.Arn}/invocations
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
-              "method.response.header.Access-Control-Allow-Origin": "'*'"
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,PATCH,DELETE,OPTIONS'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
             ResponseTemplates:
               application/json: $input.json('$')
       MethodResponses:
         - StatusCode: 200
           ResponseParameters:
-            "method.response.header.Access-Control-Allow-Headers": true
-            "method.response.header.Access-Control-Allow-Methods": true
-            "method.response.header.Access-Control-Allow-Origin": true
-  
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   PreSignedUrlApiGatewayOptionsMethod:
-    Type: 'AWS::ApiGateway::Method'
+    Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
       RestApiId: !Ref ApiGatewayRestApi
@@ -387,24 +409,225 @@ Resources:
       Integration:
         Type: MOCK
         RequestTemplates:
-          application/json: "{\"statusCode\": 200}"
+          application/json: '{"statusCode": 200}'
         PassthroughBehavior: WHEN_NO_MATCH
         IntegrationResponses:
           - StatusCode: 200
             ResponseParameters:
-              "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'"
-              "method.response.header.Access-Control-Allow-Origin": "'*'"
+              method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+              method.response.header.Access-Control-Allow-Methods: '''GET,POST,OPTIONS'''
+              method.response.header.Access-Control-Allow-Origin: '''*'''
             ResponseTemplates:
-              application/json: ""
+              application/json: ''
       MethodResponses:
         - StatusCode: 200
           ResponseModels:
-            application/json: "Empty"
+            application/json: Empty
           ResponseParameters:
-            "method.response.header.Access-Control-Allow-Headers": true
-            "method.response.header.Access-Control-Allow-Methods": true
-            "method.response.header.Access-Control-Allow-Origin": true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # VPC, and RDS
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: MyVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet AZ1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet AZ2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet AZ1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Private Subnet AZ2
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Routes (AZ1)
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private Routes (AZ2)
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VpcCIDR
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: revisions-db
+      DBName: !Ref DBName
+      Engine: postgres
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: '20'
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
     # Log Group for ECS Tasks
   ECSLogGroup:
     Type: AWS::Logs::LogGroup
@@ -455,16 +678,52 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           Subnets:
-            - subnet-087788b48f12bba4c # us-east-1a
-            - subnet-09cd0552f11503aac # us-east-1b
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
           SecurityGroups:
-            - !Ref SecurityGroup
-  SecurityGroup:
+            - !Ref FargateSecurityGroup
+  # SecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupName: MySecurityGroup
+  #     GroupDescription: A security group for my instance
+  #     VpcId: vpc-0d0ab6104c1862766
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 80
+  #         ToPort: 80
+  #         CidrIp: 0.0.0.0/0
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 0.0.0.0/0
+  #       - IpProtocol: tcp
+  #         FromPort: 3000
+  #         ToPort: 3000
+  #         CidrIp: 0.0.0.0/0
+  #     SecurityGroupEgress:
+  #       - IpProtocol: '-1'
+  #         CidrIp: 0.0.0.0/0
+  FargateSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: MySecurityGroup
-      GroupDescription: A security group for my instance
-      VpcId: vpc-0d0ab6104c1862766
+      GroupName: FargateSecurityGroup
+      GroupDescription: Security group for Fargate tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: LoadBalancerSecurityGroup
+      GroupDescription: Security group for Load Balancer
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -474,10 +733,6 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
-          CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: '-1'
           CidrIp: 0.0.0.0/0
@@ -485,24 +740,24 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
-        - subnet-087788b48f12bba4c # us-east-1a
-        - subnet-09cd0552f11503aac # us-east-1b
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       SecurityGroups:
-        - !Ref SecurityGroup
+        - !Ref LoadBalancerSecurityGroup
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Port: 3000
       Protocol: HTTP
-      VpcId: vpc-0d0ab6104c1862766
+      VpcId: !Ref VPC
       TargetType: ip
-      HealthCheckPath: /
+      HealthCheckPath: /api/health
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 5
       UnhealthyThresholdCount: 2
       Matcher:
-        HttpCode: '404'
+        HttpCode: '200'
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -542,10 +797,37 @@ Outputs:
     Value: !Ref RevisionsBucketPolicy
   SendEmailApiUrl:
     Description: URL of the API endpoint
-    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/sendemail'
+    Value: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/sendemail
   SubscribeApiUrl:
     Description: URL of the API endpoint
-    Value: !Sub 'https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/subscribe'
+    Value: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/subscribe
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPCID
+  PublicSubnets:
+    Description: A list of the public subnets
+    Value: !Join
+      - ','
+      - - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnets
+  PrivateSubnets:
+    Description: A list of the private subnets
+    Value: !Join
+      - ','
+      - - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnets
+  RDSEndpoint:
+    Description: Endpoint of the RDS instance
+    Value: !GetAtt RDSInstance.Endpoint.Address
   LoadBalancer:
     Description: Load Balancer
     Value: !Ref LoadBalancer
+  LoadBalancerDNS:
+    Description: DNS name of the load balancer
+    Value: !GetAtt LoadBalancer.DNSName

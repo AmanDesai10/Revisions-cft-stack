@@ -7,7 +7,7 @@ export default function HomePage() {
 
   return (
     <section className="w-full h-screen py-12 md:py-24 lg:py-32 xl:py-48 bg-black">
-      <div className="container px-4 md:px-6">
+      <div className="container px-4 md:px-6 mx-auto">
         <div className="grid gap-6 items-center">
           <div className="flex flex-col justify-center space-y-4 text-center">
             <div className="space-y-2">
@@ -22,8 +22,6 @@ export default function HomePage() {
               <button onClick={handleGetStarted} className="bg-white text-black p-2.5 rounded-md">
                 Get Started
               </button>
-              <p className="text-md text-zinc-200 dark:text-zinc-100 text-center">
-                CSCI 5409 - Cloud Computing</p>
               <p className="text-md text-zinc-200 dark:text-zinc-100 text-center">
                 Aman Desai - B00965752
               </p>

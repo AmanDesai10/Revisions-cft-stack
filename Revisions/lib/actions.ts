@@ -14,6 +14,7 @@ import { S3 } from "@aws-sdk/client-s3";
 import { customAlphabet } from "nanoid";
 import { getBlurDataURL } from "@/lib/utils";
 import { redirect } from "next/navigation";
+import { NextResponse } from "next/server";
 
 const nanoid = customAlphabet(
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
@@ -121,23 +122,49 @@ export const updateOrganisation = withOrganisationAuth(
           response = await removeDomain(organisation.customDomain);
         }
       } else if (key === "image" || key === "logo") {
-        if (!process.env.AWS_CLOUDFRONT_URL) {
-          return {
-            error:
-              "Missing AWS_CLOUDFRONT_URL. Don't forget to add that to your .env file.",
-          };
-        }
+        console.log("Uploading file: ", "image");
+
+        // uncomment if cloudfront is enabled else use the presigned url
+        // if (!process.env.AWS_CLOUDFRONT_URL) {
+        //   return {
+        //     error:
+        //       "Missing AWS_CLOUDFRONT_URL. Don't forget to add that to your .env file.",
+        //   };
+        // }
 
         const file = formData.get(key) as File;
         const filename = `${nanoid()}.${file.type.split("/")[1]}`;
 
+        console.log("Uploading file: ", filename);
         await s3Client.putObject({
           Bucket: process.env.AWS_BUCKET_NAME,
           Key: filename,
           Body: Buffer.from(await file.arrayBuffer()),
           ContentType: file.type,
         });
-        const url = `${process.env.AWS_CLOUDFRONT_URL}/${filename}`;
+
+        let url;
+        try {
+          const response = await fetch(process.env.AWS_APIGATEWAY_URL + "/presignedurl", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: filename }),
+          });
+          console.log(response.statusText);
+          if (!response.ok) {
+            throw new Error("Failed to get URL from API");
+          }
+
+          const data = await response.json();
+          console.log("Data", data);
+          url = JSON.parse(data.body);
+
+        } catch (error) {
+          console.error("Error calling API", error);
+          return NextResponse.json({ message: "Error getting URL from API" });
+        }
+
+        // const url = `${process.env.AWS_CLOUDFRONT_URL}/${filename}`;
         console.log("URL: ", url);
 
         const blurhash = key === "image" ? await getBlurDataURL(url) : null;
@@ -339,7 +366,31 @@ export const updatePostMetadata = withPostAuth(
           // ACL: "public-read",
         });
 
-        const url = `${process.env.AWS_CLOUDFRONT_URL}/${filename}`;
+        // uncomment if cloudfront is enabled else use the presigned url
+        // const url = `${process.env.AWS_CLOUDFRONT_URL}/${filename}`;
+
+        // presigned URL
+        let url;
+        try {
+          const response = await fetch(process.env.AWS_APIGATEWAY_URL + "/presignedurl", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: filename }),
+          });
+          console.log(response.statusText);
+          if (!response.ok) {
+            throw new Error("Failed to get URL from API");
+          }
+
+          const data = await response.json();
+          console.log("Data", data);
+          url = JSON.parse(data.body);
+
+        } catch (error) {
+          console.error("Error calling API", error);
+          return NextResponse.json({ message: "Error getting URL from API" });
+        }
+
         console.log("URL: ", url);
 
         const blurhash = await getBlurDataURL(url);

@@ -18,6 +18,11 @@ export default async function middleware(req: NextRequest) {
   const url = req.nextUrl;
   console.log("URL:", url);
 
+  // Check for /api/health endpoint and return 200 status
+  if (url.pathname === "/health") {
+    return new NextResponse('OK', { status: 200 });
+  }
+
   let hostname = req.headers
     .get("host")!
     .replace(".localhost:3000", `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`);
@@ -52,7 +57,7 @@ export default async function middleware(req: NextRequest) {
 
   // rewrite root application to `/home` folder
   if (
-    hostname === "localhost:3000" ||
+    hostname === "localhost:3000" || hostname === "0.0.0.0:3000" ||
     hostname === process.env.NEXT_PUBLIC_ROOT_DOMAIN
   ) {
     return NextResponse.rewrite(

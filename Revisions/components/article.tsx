@@ -7,9 +7,11 @@ import MDX from "./mdx";
 export default function Article({
   content,
   data,
+  index,
 }: {
   content: Post;
   data: any;
+  index: number;
 }) {
   return (
     <article className={"md:flex"}>
@@ -19,7 +21,8 @@ export default function Article({
       <div className={styles["content-block"]}>
         <div className={styles["feed-border"]}></div>
         <div className={styles["feed-dot"]}></div>
-        <Badge label={`v${content.title?.substring(content.title.length - 1)}`} />
+        {/* <Badge label={`v${content.title?.substring(content.title.length - 1)}`} /> */}
+        <Badge label={`v${index}`} />
         {content.title && (
           <h1 className="mb-4 text-xl font-bold dark:text-white sm:text-3xl">
             {content.title}

@@ -28,7 +28,7 @@ export default async function SiteHomePage({
         {posts.length > 0 ? (
           <section className="relative mx-auto max-w-5xl overflow-hidden px-4 sm:px-6 lg:px-8">
             {posts.map((post, index) => (
-              <Article key={index} content={post} data={data} />
+              <Article key={index} content={post} data={data} index={index + 1} />
             ))}
           </section>
         ) : (

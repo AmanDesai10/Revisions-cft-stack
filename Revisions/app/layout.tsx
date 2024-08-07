@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 const title = "Revisions - changelogs";
 const description =
   "Revisions is a platform for creating and sharing changelogs for your projects/packages. It's free to get started.";
-const image = "https://images-revisions.s3.amazonaws.com/logo-full.png";
+const image = "https://revisions-images.s3.amazonaws.com/logo-full.png";
 
 export const metadata: Metadata = {
   title,
   description,
-  icons: ["https://images-revisions.s3.amazonaws.com/favicon.ico"],
+  icons: ["https://revisions-images.s3.amazonaws.com/favicon.ico"],
   openGraph: {
     title,
     description,

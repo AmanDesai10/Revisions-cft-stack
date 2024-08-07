@@ -17,6 +17,7 @@ export async function POST(req: Request) {
   const file = req.body || "";
   const contentType = req.headers.get("content-type") || "text/plain";
   const filename = `${nanoid()}.${contentType.split("/")[1]}`;
+  console.log("Getting S3 client", filename);
   const client = new S3({
     region: process.env.AWS_REGION,
     endpoint: process.env.AWS_BUCKET_ENDPOINT,
@@ -31,16 +32,51 @@ export async function POST(req: Request) {
       message: "No file provided",
     });
   }
-  await client.putObject({
-    Bucket: process.env.AWS_BUCKET_NAME,
-    Key: filename,
-    Body: await streamToBuffer(file),
-    ContentType: contentType,
-  });
+  // try catch
 
-  return NextResponse.json({
-    url: `${process.env.AWS_CLOUDFRONT_URL}/${filename}`,
-  });
+  try {
+    console.log("Uploading file");
+    await client.putObject({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: filename,
+      Body: await streamToBuffer(file),
+      ContentType: contentType,
+    });
+  } catch (error) {
+    console.error("Error uploading file", error);
+    return NextResponse.json({
+      message: "Error uploading file",
+    });
+  }
+  console.log("File uploaded");
+
+  // uncomment if cloudfront is enabled else use the presigned url
+  // return NextResponse.json({
+  //   url: `${process.env.AWS_CLOUDFRONT_URL}/${filename}`,
+  // });
+
+  let url;
+  try {
+    const response = await fetch(process.env.AWS_APIGATEWAY_URL + "/presignedurl", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: filename }),
+    });
+    console.log(response.statusText);
+    if (!response.ok) {
+      throw new Error("Failed to get URL from API");
+    }
+
+    const data = await response.json();
+    console.log("Data", data);
+    url = JSON.parse(data.body);
+
+  } catch (error) {
+    console.error("Error calling API", error);
+    return NextResponse.json({ message: "Error getting URL from API" });
+  }
+  console.log("URL", url);
+  return NextResponse.json({ url: url });
 }
 
 async function streamToBuffer(
